@@ -10,7 +10,7 @@ public class TemperatureSensor implements Sensor {
     }
 
     public int read() {
-        if(this.ifOn=false) {
+        if(this.ifOn==false) {
             throw new IllegalStateException("This temperature sensor is off.");
         }
         return new Random().nextInt(61)-30;
