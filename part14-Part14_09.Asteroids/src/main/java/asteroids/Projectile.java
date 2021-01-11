@@ -12,7 +12,7 @@ public class Projectile extends Character{
         super.getCharacter().setTranslateX(super.getCharacter().getTranslateX() + super.getMovement().getX());
         super.getCharacter().setTranslateY(super.getCharacter().getTranslateY() + super.getMovement().getY());
 
-        if(super.getCharacter().getTranslateX()>AsteroidsApplication.WIDTH){
+        if(super.getCharacter().getTranslateX()>GameView.gameScreenWidth){
             setAlive(false);
         }
 
@@ -20,7 +20,7 @@ public class Projectile extends Character{
             setAlive(false);
         }
 
-        if(super.getCharacter().getTranslateY()>AsteroidsApplication.HEIGHT){
+        if(super.getCharacter().getTranslateY()>GameView.gameScreenHeight){
             setAlive(false);
         }
 
