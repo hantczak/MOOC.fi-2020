@@ -6,49 +6,44 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.layout.Pane;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 public class GameMechanic {
-    public Pane gameScreen;
-    public Scene gameScene;
-    public int screenWidth;
-    public int screenHeight;
+    private GameView gameSettings;
+    private Pane gamePane;
+    private Scene gameScene;
+    private List<Character> asteroids;
+    private List<Character> projectiles;
+    private Character ship;
+    private PointsCounter pointsCounter;
 
-    public GameMechanic(int height, int width,Scene scene){
-        this.gameScreen = new Pane();
-        gameScreen.setPrefSize(screenWidth, screenHeight);
-        screenWidth = width;
-        screenHeight = height;
+    public GameMechanic(Scene scene, GameView gameView) {
+        this.gameSettings = gameView;
+        asteroids = new ArrayList<>();
+        projectiles = new ArrayList<>();
+        this.gamePane = new Pane();
+        gamePane.setPrefSize(gameSettings.getGameScreenWidth(), gameSettings.getGameScreenHeight());
         this.gameScene = scene;
     }
 
 
-    public void startGame(PointsCounter pointsCounter) {
+    public void setupGameComponents(PointsCounter pointsCounter) {
+        this.pointsCounter = pointsCounter;
 
-        List<Character> asteroids = new ArrayList<>();
-        for (int i = 0; i <= 5; i++) {
-            Random rand = new Random();
-            Asteroid asteroid = new Asteroid(rand.nextInt(screenWidth), rand.nextInt(screenHeight));
-            asteroids.add(asteroid);
-            asteroid.setAlive(true);
-        }
+        spawnInitialAsteroids();
 
-        Ship ship = new Ship(screenWidth / 2, screenHeight / 2);
-        asteroids.forEach(asteroid -> gameScreen.getChildren().add(asteroid.getCharacter()));
-        gameScreen.getChildren().add(ship.getCharacter());
+        ship = new Ship(gameSettings.getGameScreenWidth() / 2, gameSettings.getGameScreenHeight() / 2);
+        asteroids.forEach(asteroid -> gamePane.getChildren().add(asteroid.getCharacter()));
+        gamePane.getChildren().add(ship.getCharacter());
 
-        List<Character> projectiles = new ArrayList<>();
+        Map<KeyCode, Boolean> pressedKeys = readKeyboardInput();
 
-        Map<KeyCode, Boolean> pressedKeys = new HashMap<>();
+        startGame(pressedKeys);
 
-        gameScene.setOnKeyPressed(keyEvent -> {
-            pressedKeys.put(keyEvent.getCode(), true);
-        });
+    }
 
-        gameScene.setOnKeyReleased(keyEvent -> {
-            pressedKeys.put(keyEvent.getCode(), false);
-        });
-
+    public void startGame(Map<KeyCode, Boolean> pressedKeys) {
         new AnimationTimer() {
             public void handle(long now) {
                 if (pressedKeys.getOrDefault(KeyCode.LEFT, false)) {
@@ -60,6 +55,9 @@ public class GameMechanic {
                 if (pressedKeys.getOrDefault(KeyCode.UP, false)) {
                     ship.accelerate();
                 }
+                if (pressedKeys.getOrDefault(KeyCode.DOWN, false)) {
+                    ship.decelerate();
+                }
 
 
                 if (pressedKeys.getOrDefault(KeyCode.SPACE, false) && projectiles.size() < 5) {
@@ -68,44 +66,24 @@ public class GameMechanic {
                     projectile.setAlive(true);
                     projectiles.add(projectile);
 
-                    projectile.accelerate();
-                    projectile.setMovement(projectile.getMovement().normalize().multiply(3));
+                    setProjectileSpeed(projectile);
 
-                    gameScreen.getChildren().add(projectile.getCharacter());
+                    gamePane.getChildren().add(projectile.getCharacter());
                     pressedKeys.put(KeyCode.SPACE, false);
                 }
-                ship.move();
-                asteroids.forEach(asteroid -> asteroid.move());
-                projectiles.forEach(projectile -> projectile.move());
 
-                asteroids.forEach(asteroid -> {
-                    if (asteroid.collide(ship)) {
-                        stop();
-                    }
-                });
+                ensureCharactersMovement();
 
+                if(checkForShipCollision()){
+                    stop();
+                }
 
-                projectiles.forEach(projectile -> {
-                    asteroids.forEach(asteroid -> {
-                        if (projectile.collide(asteroid)) {
-                            projectile.setAlive(false);
-                            asteroid.setAlive(false);
-                            pointsCounter.increasePoints();
-                        }
-                    });
-                });
+                checkForProjectileCollision();
+
                 deleteDeadCharacters(projectiles);
                 deleteDeadCharacters(asteroids);
+                spawnAdditionalAsteroid();
 
-                if (Math.random() < 0.005) {
-                    Random rand = new Random();
-                    Asteroid asteroid = new Asteroid(rand.nextInt(screenWidth), rand.nextInt(screenHeight));
-                    if (!asteroid.collide(ship)) {
-                        asteroids.add(asteroid);
-                        asteroid.setAlive(true);
-                        gameScreen.getChildren().add(asteroid.getCharacter());
-                    }
-                }
             }
         }.start();
     }
@@ -114,14 +92,81 @@ public class GameMechanic {
         listOfCharacters.stream()
                 .filter(character -> !character.isAlive())
                 .forEach(character -> {
-                    gameScreen.getChildren().remove(character.getCharacter());
+                    gamePane.getChildren().remove(character.getCharacter());
                 });
         listOfCharacters.removeAll(listOfCharacters.stream()
                 .filter(character -> !character.isAlive())
                 .collect(Collectors.toList()));
     }
 
-    public Pane getGamePane(){
-        return gameScreen;
+    public Map<KeyCode, Boolean> readKeyboardInput() {
+        Map<KeyCode, Boolean> pressedKeys = new HashMap<>();
+        gameScene.setOnKeyPressed(keyEvent -> {
+            pressedKeys.put(keyEvent.getCode(), true);
+        });
+
+        gameScene.setOnKeyReleased(keyEvent -> {
+            pressedKeys.put(keyEvent.getCode(), false);
+        });
+        return pressedKeys;
+    }
+
+    public void spawnAdditionalAsteroid() {
+        if (Math.random() < 0.005) {
+            Random rand = new Random();
+            Asteroid asteroid = new Asteroid(rand.nextInt(gameSettings.getGameScreenWidth()), rand.nextInt(gameSettings.getGameScreenHeight()));
+            if (!asteroid.collide(ship)) {
+                asteroids.add(asteroid);
+                asteroid.setAlive(true);
+                gamePane.getChildren().add(asteroid.getCharacter());
+            }
+        }
+    }
+
+    public void spawnInitialAsteroids() {
+        asteroids = new ArrayList<>();
+        for (int i = 0; i <= 5; i++) {
+            Random rand = new Random();
+            Asteroid asteroid = new Asteroid(rand.nextInt(gameSettings.getGameScreenWidth()), rand.nextInt(gameSettings.getGameScreenHeight()));
+            asteroids.add(asteroid);
+            asteroid.setAlive(true);
+        }
+    }
+
+    public void setProjectileSpeed(Character projectile) {
+        projectile.accelerate();
+        projectile.setMovement(projectile.getMovement().normalize().multiply(4));
+    }
+
+    public void ensureCharactersMovement() {
+        ship.move();
+        asteroids.forEach(asteroid -> asteroid.move());
+        projectiles.forEach(projectile -> projectile.move());
+    }
+
+    public boolean checkForShipCollision(){
+        AtomicBoolean ifTrue = new AtomicBoolean(false);
+        asteroids.forEach(asteroid -> {
+            if (asteroid.collide(ship)) {
+                ifTrue.set(true);
+            }
+        });
+        return ifTrue.get();
+    }
+
+    public void checkForProjectileCollision(){
+        projectiles.forEach(projectile -> {
+            asteroids.forEach(asteroid -> {
+                if (projectile.collide(asteroid)) {
+                    projectile.setAlive(false);
+                    asteroid.setAlive(false);
+                    pointsCounter.increasePoints();
+                }
+            });
+        });
+    }
+
+    public Pane getGamePane() {
+        return gamePane;
     }
 }
